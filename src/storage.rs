@@ -43,7 +43,7 @@ impl Storage for FileStorage {
     async fn list_buckets(&self) -> Result<Vec<String>> {
         let mut buckets = Vec::new();
         let mut entries = fs::read_dir(&self.root).await?;
-        
+
         while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
             if path.is_dir() {
@@ -52,7 +52,7 @@ impl Storage for FileStorage {
                 }
             }
         }
-        
+
         Ok(buckets)
     }
 
@@ -76,16 +76,16 @@ impl Storage for FileStorage {
 
     async fn put_object(&self, bucket: &str, key: &str, data: Vec<u8>) -> Result<()> {
         let object_path = self.object_path(bucket, key);
-        
+
         // Create parent directories if they don't exist
         if let Some(parent) = object_path.parent() {
             fs::create_dir_all(parent).await?;
         }
-        
+
         let mut file = fs::File::create(&object_path).await?;
         file.write_all(&data).await?;
         file.sync_all().await?;
-        
+
         Ok(())
     }
 
@@ -113,14 +113,14 @@ impl Storage for FileStorage {
 
         let mut objects = Vec::new();
         let prefix_path = prefix.map(|p| PathBuf::from(p));
-        
+
         let mut entries = fs::read_dir(&bucket_path).await?;
         while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
             if path.is_file() {
                 let relative_path = path.strip_prefix(&bucket_path)?;
                 let key = relative_path.to_string_lossy().to_string();
-                
+
                 if let Some(ref prefix) = prefix_path {
                     if key.starts_with(prefix.to_string_lossy().as_ref()) {
                         objects.push(key);
@@ -130,8 +130,7 @@ impl Storage for FileStorage {
                 }
             }
         }
-        
+
         Ok(objects)
     }
 }
-

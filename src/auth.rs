@@ -140,7 +140,7 @@ pub fn verify_signature(
 fn canonicalize_uri(uri: &str) -> anyhow::Result<String> {
     let url = Url::parse(uri)?;
     let path = url.path();
-    
+
     // URL encode the path (but preserve /)
     let mut encoded = String::new();
     for segment in path.split('/') {
@@ -149,21 +149,21 @@ fn canonicalize_uri(uri: &str) -> anyhow::Result<String> {
         }
         encoded.push_str(&percent_encode(segment));
     }
-    
+
     Ok(encoded)
 }
 
 fn canonicalize_query_string(uri: &str) -> anyhow::Result<String> {
     let url = Url::parse(uri)?;
     let mut params: Vec<(String, String)> = Vec::new();
-    
+
     for (key, value) in url.query_pairs() {
         params.push((
             percent_encode(&key.to_string()),
             percent_encode(&value.to_string()),
         ));
     }
-    
+
     params.sort_by(|a, b| {
         if a.0 != b.0 {
             a.0.cmp(&b.0)
@@ -171,7 +171,7 @@ fn canonicalize_query_string(uri: &str) -> anyhow::Result<String> {
             a.1.cmp(&b.1)
         }
     });
-    
+
     Ok(params
         .iter()
         .map(|(k, v)| format!("{}={}", k, v))
@@ -182,7 +182,7 @@ fn canonicalize_query_string(uri: &str) -> anyhow::Result<String> {
 fn canonicalize_headers(headers: &HeaderMap, signed_headers: &str) -> anyhow::Result<String> {
     let mut header_list: Vec<(String, String)> = Vec::new();
     let signed_header_names: Vec<&str> = signed_headers.split(';').collect();
-    
+
     for name in &signed_header_names {
         let name_lower = name.to_lowercase();
         if let Some(value) = headers.get(*name) {
@@ -190,9 +190,9 @@ fn canonicalize_headers(headers: &HeaderMap, signed_headers: &str) -> anyhow::Re
             header_list.push((name_lower, value_str.to_string()));
         }
     }
-    
+
     header_list.sort_by(|a, b| a.0.cmp(&b.0));
-    
+
     Ok(header_list
         .iter()
         .map(|(k, v)| format!("{}:{}", k, v))
@@ -257,4 +257,3 @@ pub async fn authenticate_request(
 
     Ok(())
 }
-

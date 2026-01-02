@@ -11,7 +11,7 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
-use tracing::{info, Level};
+use tracing::{Level, info};
 use tracing_subscriber;
 
 use crate::auth::AuthConfig;
@@ -48,7 +48,7 @@ async fn main() -> Result<()> {
 
     if args.daemon {
         info!("Starting depotd as daemon...");
-        
+
         let daemonize = Daemonize::new()
             .pid_file(args.pid_file)
             .working_directory(".")
@@ -68,34 +68,34 @@ async fn main() -> Result<()> {
 
     // Initialize storage
     let storage = Arc::new(FileStorage::new(&config)?);
-    
+
     // Initialize auth config
     let auth_config = AuthConfig::from_config(&config)?;
     let auth_config = auth_config.map(Arc::new);
-    
+
     if auth_config.is_some() {
         info!("Authentication enabled");
     } else {
         info!("Authentication disabled - running in open mode");
     }
-    
+
     // Create router
-    let app = api::router(storage, auth_config)
-        .layer(
-            ServiceBuilder::new()
-                .layer(TraceLayer::new_for_http())
-                .into_inner(),
-        );
+    let app = api::router(storage, auth_config).layer(
+        ServiceBuilder::new()
+            .layer(TraceLayer::new_for_http())
+            .into_inner(),
+    );
 
     // Start server
     let addr = format!("{}:{}", config.server.host, config.server.port);
     info!("Starting S3-compatible API server on {}", addr);
-    
-    let listener = TcpListener::bind(&addr).await
+
+    let listener = TcpListener::bind(&addr)
+        .await
         .with_context(|| format!("Failed to bind to {}", addr))?;
-    
+
     info!("Server listening on {}", addr);
-    
+
     axum::serve(listener, app).await?;
 
     Ok(())

@@ -1,14 +1,14 @@
-use crate::auth::{authenticate_request, error_response, AuthConfig};
+use crate::auth::{AuthConfig, authenticate_request, error_response};
 use crate::storage::Storage;
+use axum::body::to_bytes;
 use axum::{
+    Router,
     body::Body,
     extract::{Path, Query, State},
     http::{HeaderMap, Method, StatusCode, Uri},
     response::{IntoResponse, Response},
     routing::{delete, get, put},
-    Router,
 };
-use axum::body::to_bytes;
 use serde::Deserialize;
 use std::sync::Arc;
 
@@ -37,8 +37,14 @@ pub fn router<S: Storage + 'static>(
 
     Router::new()
         .route("/", get(list_buckets))
-        .route("/:bucket", get(list_objects).put(create_bucket).delete(delete_bucket))
-        .route("/:bucket/*key", get(get_object).put(put_object).delete(delete_object))
+        .route(
+            "/:bucket",
+            get(list_objects).put(create_bucket).delete(delete_bucket),
+        )
+        .route(
+            "/:bucket/*key",
+            get(get_object).put(put_object).delete(delete_object),
+        )
         .with_state(app_state)
 }
 
@@ -271,7 +277,10 @@ async fn list_objects<S: Storage>(
             .unwrap();
     }
 
-    match storage.list_objects(&bucket, params.prefix.as_deref()).await {
+    match storage
+        .list_objects(&bucket, params.prefix.as_deref())
+        .await
+    {
         Ok(objects) => {
             let xml = format!(
                 r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -527,4 +536,3 @@ async fn delete_object<S: Storage>(
         }
     }
 }
-
