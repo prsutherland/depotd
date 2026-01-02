@@ -1,0 +1,16 @@
+[server]
+host = "127.0.0.1"
+port = 9000
+# Required for authentication: access_key and secret_key
+# If not provided, the server will run in open mode (no authentication)
+access_key = "your-access-key"
+secret_key = "your-secret-key"
+
+[storage]
+root_path = "./data"
+
+[logging]
+level = "info"
+# Optional: log to file instead of stdout
+# file = "/var/log/depotd.log"
+
