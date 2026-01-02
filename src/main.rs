@@ -80,7 +80,12 @@ async fn main() -> Result<()> {
     }
 
     // Create router
-    let app = api::router(storage, auth_config).layer(
+    let app = api::router(
+        storage,
+        auth_config,
+        config.server.bucket_hostname_pattern.clone(),
+    )
+    .layer(
         ServiceBuilder::new()
             .layer(TraceLayer::new_for_http())
             .into_inner(),

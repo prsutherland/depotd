@@ -5,6 +5,11 @@ port = 9000
 # If not provided, the server will run in open mode (no authentication)
 access_key = "your-access-key"
 secret_key = "your-secret-key"
+# Optional: Hostname pattern for virtual-hosted-style bucket URLs
+# Use {bucket} as a placeholder for the bucket name
+# Example: "{bucket}.s3.example.com" or "{bucket}.localhost"
+# If not set, virtual-hosted-style URLs are disabled
+# bucket_hostname_pattern = "{bucket}.s3.example.com"
 
 [storage]
 root_path = "./data"
@@ -13,4 +18,3 @@ root_path = "./data"
 level = "info"
 # Optional: log to file instead of stdout
 # file = "/var/log/depotd.log"
-
