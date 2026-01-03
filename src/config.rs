@@ -37,23 +37,4 @@ impl Config {
         let config: Config = toml::from_str(&contents)?;
         Ok(config)
     }
-
-    pub fn default() -> Self {
-        Config {
-            server: ServerConfig {
-                host: "127.0.0.1".to_string(),
-                port: 9000,
-                access_key: None,
-                secret_key: None,
-                bucket_hostname_pattern: None,
-            },
-            storage: StorageConfig {
-                root_path: PathBuf::from("./data"),
-            },
-            logging: Some(LoggingConfig {
-                level: "info".to_string(),
-                file: None,
-            }),
-        }
-    }
 }

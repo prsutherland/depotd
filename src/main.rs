@@ -111,16 +111,10 @@ fn init_logging(config: &Config) -> Result<()> {
         .logging
         .as_ref()
         .map(|l| l.level.as_str())
-        .unwrap_or("info");
+        .unwrap_or("info")
+        .to_lowercase();
 
-    let log_level = match level.to_lowercase().as_str() {
-        "trace" => Level::TRACE,
-        "debug" => Level::DEBUG,
-        "info" => Level::INFO,
-        "warn" => Level::WARN,
-        "error" => Level::ERROR,
-        _ => Level::INFO,
-    };
+    let log_level = level.parse::<Level>().unwrap_or(Level::INFO);
 
     let subscriber_builder = tracing_subscriber::fmt()
         .with_max_level(log_level)

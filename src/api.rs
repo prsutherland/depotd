@@ -7,7 +7,7 @@ use axum::{
     extract::{Path, Query, State},
     http::{HeaderMap, Method, StatusCode, Uri},
     response::{IntoResponse, Response},
-    routing::{delete, get, put},
+    routing::get,
 };
 use serde::Deserialize;
 use std::sync::Arc;
