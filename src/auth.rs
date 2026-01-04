@@ -1,8 +1,5 @@
 use crate::config::Config;
-use axum::{
-    http::{HeaderMap, StatusCode},
-    response::Response,
-};
+use axum::http::HeaderMap;
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
 use url::Url;
@@ -28,22 +25,6 @@ impl AuthConfig {
             )),
         }
     }
-}
-
-pub fn error_response(code: &str, message: &str) -> Response {
-    let xml = format!(
-        r#"<?xml version="1.0" encoding="UTF-8"?>
-<Error>
-  <Code>{}</Code>
-  <Message>{}</Message>
-</Error>"#,
-        code, message
-    );
-    Response::builder()
-        .status(StatusCode::FORBIDDEN)
-        .header("Content-Type", "application/xml")
-        .body(axum::body::Body::from(xml))
-        .unwrap()
 }
 
 pub fn verify_signature(

@@ -18,6 +18,13 @@ pub struct ServerConfig {
     /// The pattern should contain `{bucket}` placeholder, e.g., `{bucket}.s3.example.com`.
     /// If not set, virtual-hosted-style URLs are disabled.
     pub bucket_hostname_pattern: Option<String>,
+    /// Maximum body size in bytes (default: 100MB)
+    #[serde(default = "default_max_body_size")]
+    pub max_body_size: usize,
+}
+
+fn default_max_body_size() -> usize {
+    100 * 1024 * 1024 // 100MB
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

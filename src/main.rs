@@ -2,6 +2,7 @@ mod api;
 mod auth;
 mod config;
 mod storage;
+mod vhost_rewrite;
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -9,7 +10,7 @@ use daemonize::Daemonize;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use tower::ServiceBuilder;
+use tower::{Layer, ServiceBuilder};
 use tower_http::trace::TraceLayer;
 use tracing::{Level, info};
 use tracing_subscriber;
@@ -79,17 +80,34 @@ async fn main() -> Result<()> {
         info!("Authentication disabled - running in open mode");
     }
 
-    // Create router
-    let app = api::router(
-        storage,
-        auth_config,
+    // Create router with tracing middleware (runs after routing)
+    let max_body_size = config.server.max_body_size;
+    let router = api::router(
+        storage.clone(),
+        auth_config.clone(),
         config.server.bucket_hostname_pattern.clone(),
+        max_body_size,
     )
     .layer(
         ServiceBuilder::new()
             .layer(TraceLayer::new_for_http())
             .into_inner(),
     );
+
+    // Get state for bucket rewrite middleware
+    let bucket_hostname_pattern = config.server.bucket_hostname_pattern.clone();
+    let rewrite_state = api::AppState {
+        storage,
+        auth_config,
+        bucket_hostname_pattern,
+        max_body_size,
+    };
+
+    // Apply virtual-hosted style rewrite middleware around the entire Router
+    // This must run BEFORE routing, so we use a custom Layer
+    // Following the pattern from: https://docs.rs/axum/latest/axum/middleware/index.html#rewriting-request-uri-in-middleware
+    let rewrite_layer = vhost_rewrite::vhost_rewrite_layer(rewrite_state);
+    let app_with_rewrite = rewrite_layer.layer(router);
 
     // Start server
     let addr = format!("{}:{}", config.server.host, config.server.port);
@@ -101,7 +119,21 @@ async fn main() -> Result<()> {
 
     info!("Server listening on {}", addr);
 
-    axum::serve(listener, app).await?;
+    // Convert the wrapped Service into a MakeService
+    // Our custom BucketRewriteService implements Clone, so we can use BoxCloneService
+    use tower::make::Shared;
+    use tower::util::BoxCloneService;
+    use axum::http::Request;
+    use axum::response::Response;
+    use std::convert::Infallible;
+    
+    // Box the service to make it work with Shared
+    let boxed_service: BoxCloneService<Request<axum::body::Body>, Response, Infallible> = 
+        BoxCloneService::new(app_with_rewrite);
+    
+    // Shared makes the service into a MakeService that can be used with axum::serve
+    let make_service = Shared::new(boxed_service);
+    axum::serve(listener, make_service).await?;
 
     Ok(())
 }

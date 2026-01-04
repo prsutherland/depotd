@@ -36,6 +36,42 @@ impl FileStorage {
     fn object_path(&self, bucket: &str, key: &str) -> PathBuf {
         self.bucket_path(bucket).join(key)
     }
+
+    /// Validate that a key doesn't contain path traversal attempts
+    fn validate_key(key: &str) -> Result<()> {
+        // Prevent path traversal attacks
+        if key.contains("..") || key.contains("//") || key.starts_with('/') {
+            return Err(anyhow::anyhow!("Invalid key: path traversal detected"));
+        }
+        // Prevent absolute paths
+        if PathBuf::from(key).is_absolute() {
+            return Err(anyhow::anyhow!("Invalid key: absolute path not allowed"));
+        }
+        Ok(())
+    }
+
+    /// Validate bucket name according to S3 rules
+    fn validate_bucket_name(bucket: &str) -> Result<()> {
+        if bucket.is_empty() {
+            return Err(anyhow::anyhow!("Bucket name cannot be empty"));
+        }
+        if bucket.len() < 3 || bucket.len() > 63 {
+            return Err(anyhow::anyhow!("Bucket name must be 3-63 characters"));
+        }
+        // S3 bucket naming rules
+        if !bucket.chars().all(|c| {
+            c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '.'
+        }) {
+            return Err(anyhow::anyhow!("Bucket name contains invalid characters"));
+        }
+        if bucket.starts_with('.') || bucket.ends_with('.') {
+            return Err(anyhow::anyhow!("Bucket name cannot start or end with '.'"));
+        }
+        if bucket.contains("..") {
+            return Err(anyhow::anyhow!("Bucket name cannot contain '..'"));
+        }
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -57,6 +93,7 @@ impl Storage for FileStorage {
     }
 
     async fn create_bucket(&self, bucket: &str) -> Result<()> {
+        Self::validate_bucket_name(bucket)?;
         let bucket_path = self.bucket_path(bucket);
         fs::create_dir_all(&bucket_path).await?;
         Ok(())
@@ -71,11 +108,22 @@ impl Storage for FileStorage {
     }
 
     async fn bucket_exists(&self, bucket: &str) -> bool {
-        self.bucket_path(bucket).exists()
+        match fs::metadata(self.bucket_path(bucket)).await {
+            Ok(metadata) => metadata.is_dir(),
+            Err(_) => false,
+        }
     }
 
     async fn put_object(&self, bucket: &str, key: &str, data: Vec<u8>) -> Result<()> {
+        Self::validate_key(key)?;
+        
         let object_path = self.object_path(bucket, key);
+        
+        // Ensure the resolved path is still within the bucket directory
+        let bucket_path = self.bucket_path(bucket);
+        if !object_path.starts_with(&bucket_path) {
+            return Err(anyhow::anyhow!("Invalid key: path traversal detected"));
+        }
 
         // Create parent directories if they don't exist
         if let Some(parent) = object_path.parent() {
@@ -90,7 +138,16 @@ impl Storage for FileStorage {
     }
 
     async fn get_object(&self, bucket: &str, key: &str) -> Result<Vec<u8>> {
+        Self::validate_key(key)?;
+        
         let object_path = self.object_path(bucket, key);
+        
+        // Ensure the resolved path is still within the bucket directory
+        let bucket_path = self.bucket_path(bucket);
+        if !object_path.starts_with(&bucket_path) {
+            return Err(anyhow::anyhow!("Invalid key: path traversal detected"));
+        }
+        
         let mut file = fs::File::open(&object_path).await?;
         let mut data = Vec::new();
         file.read_to_end(&mut data).await?;
@@ -98,35 +155,61 @@ impl Storage for FileStorage {
     }
 
     async fn delete_object(&self, bucket: &str, key: &str) -> Result<()> {
+        Self::validate_key(key)?;
+        
         let object_path = self.object_path(bucket, key);
-        if object_path.exists() {
-            fs::remove_file(&object_path).await?;
+        
+        // Ensure the resolved path is still within the bucket directory
+        let bucket_path = self.bucket_path(bucket);
+        if !object_path.starts_with(&bucket_path) {
+            return Err(anyhow::anyhow!("Invalid key: path traversal detected"));
+        }
+        
+        match fs::metadata(&object_path).await {
+            Ok(metadata) if metadata.is_file() => {
+                fs::remove_file(&object_path).await?;
+            }
+            _ => {}
         }
         Ok(())
     }
 
     async fn list_objects(&self, bucket: &str, prefix: Option<&str>) -> Result<Vec<String>> {
         let bucket_path = self.bucket_path(bucket);
-        if !bucket_path.exists() {
-            return Ok(Vec::new());
+        
+        // Check if bucket exists using async
+        match fs::metadata(&bucket_path).await {
+            Ok(metadata) if metadata.is_dir() => {}
+            _ => return Ok(Vec::new()),
         }
 
         let mut objects = Vec::new();
-        let prefix_path = prefix.map(|p| PathBuf::from(p));
+        let prefix_str = prefix.map(|p| p.to_string());
 
-        let mut entries = fs::read_dir(&bucket_path).await?;
-        while let Some(entry) = entries.next_entry().await? {
-            let path = entry.path();
-            if path.is_file() {
-                let relative_path = path.strip_prefix(&bucket_path)?;
-                let key = relative_path.to_string_lossy().to_string();
+        // Iteratively walk the directory tree using a stack
+        let mut stack = vec![bucket_path.clone()];
+        
+        while let Some(current) = stack.pop() {
+            let mut entries = fs::read_dir(&current).await?;
+            
+            while let Some(entry) = entries.next_entry().await? {
+                let path = entry.path();
+                let metadata = fs::metadata(&path).await?;
+                
+                if metadata.is_file() {
+                    let relative_path = path.strip_prefix(&bucket_path)?;
+                    let key = relative_path.to_string_lossy().to_string();
 
-                if let Some(ref prefix) = prefix_path {
-                    if key.starts_with(prefix.to_string_lossy().as_ref()) {
+                    if let Some(ref prefix_str) = prefix_str {
+                        if key.starts_with(prefix_str) {
+                            objects.push(key);
+                        }
+                    } else {
                         objects.push(key);
                     }
-                } else {
-                    objects.push(key);
+                } else if metadata.is_dir() {
+                    // Add subdirectory to stack for processing
+                    stack.push(path);
                 }
             }
         }
