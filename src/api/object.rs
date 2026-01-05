@@ -42,7 +42,11 @@ pub async fn get_object<S: Storage>(
 
     let storage = &state.storage;
     if !storage.bucket_exists(&bucket).await {
-        return xml::error_response("NoSuchBucket", "The specified bucket does not exist", StatusCode::NOT_FOUND);
+        return xml::error_response(
+            "NoSuchBucket",
+            "The specified bucket does not exist",
+            StatusCode::NOT_FOUND,
+        );
     }
 
     match storage.get_object(&bucket, &key).await {
@@ -55,7 +59,11 @@ pub async fn get_object<S: Storage>(
                     .body(Body::empty())
                     .unwrap()
             }),
-        Err(_) => xml::error_response("NoSuchKey", "The specified key does not exist", StatusCode::NOT_FOUND),
+        Err(_) => xml::error_response(
+            "NoSuchKey",
+            "The specified key does not exist",
+            StatusCode::NOT_FOUND,
+        ),
     }
 }
 
@@ -76,7 +84,10 @@ pub async fn put_object<S: Storage>(
             if vec.len() > max_size {
                 return xml::error_response(
                     "EntityTooLarge",
-                    &format!("Request entity too large. Maximum size is {} bytes", max_size),
+                    &format!(
+                        "Request entity too large. Maximum size is {} bytes",
+                        max_size
+                    ),
                     StatusCode::PAYLOAD_TOO_LARGE,
                 );
             }
@@ -88,11 +99,18 @@ pub async fn put_object<S: Storage>(
             if error_msg.contains("too large") || error_msg.contains("limit") {
                 return xml::error_response(
                     "EntityTooLarge",
-                    &format!("Request entity too large. Maximum size is {} bytes", max_size),
+                    &format!(
+                        "Request entity too large. Maximum size is {} bytes",
+                        max_size
+                    ),
                     StatusCode::PAYLOAD_TOO_LARGE,
                 );
             }
-            return xml::error_response("InternalError", &error_msg, StatusCode::INTERNAL_SERVER_ERROR);
+            return xml::error_response(
+                "InternalError",
+                &error_msg,
+                StatusCode::INTERNAL_SERVER_ERROR,
+            );
         }
     };
 
@@ -123,7 +141,11 @@ pub async fn put_object<S: Storage>(
     if !storage.bucket_exists(&bucket).await {
         // Auto-create bucket if it doesn't exist
         if let Err(e) = storage.create_bucket(&bucket).await {
-            return xml::error_response("InternalError", &e.to_string(), StatusCode::INTERNAL_SERVER_ERROR);
+            return xml::error_response(
+                "InternalError",
+                &e.to_string(),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            );
         }
     }
 
@@ -137,7 +159,11 @@ pub async fn put_object<S: Storage>(
                     .body(Body::empty())
                     .unwrap()
             }),
-        Err(e) => xml::error_response("InternalError", &e.to_string(), StatusCode::INTERNAL_SERVER_ERROR),
+        Err(e) => xml::error_response(
+            "InternalError",
+            &e.to_string(),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        ),
     }
 }
 
@@ -183,6 +209,10 @@ pub async fn delete_object<S: Storage>(
                     .body(Body::empty())
                     .unwrap()
             }),
-        Err(e) => xml::error_response("InternalError", &e.to_string(), StatusCode::INTERNAL_SERVER_ERROR),
+        Err(e) => xml::error_response(
+            "InternalError",
+            &e.to_string(),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        ),
     }
 }

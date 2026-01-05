@@ -121,16 +121,16 @@ async fn main() -> Result<()> {
 
     // Convert the wrapped Service into a MakeService
     // Our custom BucketRewriteService implements Clone, so we can use BoxCloneService
-    use tower::make::Shared;
-    use tower::util::BoxCloneService;
     use axum::http::Request;
     use axum::response::Response;
     use std::convert::Infallible;
-    
+    use tower::make::Shared;
+    use tower::util::BoxCloneService;
+
     // Box the service to make it work with Shared
-    let boxed_service: BoxCloneService<Request<axum::body::Body>, Response, Infallible> = 
+    let boxed_service: BoxCloneService<Request<axum::body::Body>, Response, Infallible> =
         BoxCloneService::new(app_with_rewrite);
-    
+
     // Shared makes the service into a MakeService that can be used with axum::serve
     let make_service = Shared::new(boxed_service);
     axum::serve(listener, make_service).await?;

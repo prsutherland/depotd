@@ -49,7 +49,11 @@ pub async fn list_buckets<S: Storage>(
     let storage = &state.storage;
     match storage.list_buckets().await {
         Ok(buckets) => xml::list_buckets_response(&buckets),
-        Err(e) => xml::error_response("InternalError", &e.to_string(), StatusCode::INTERNAL_SERVER_ERROR),
+        Err(e) => xml::error_response(
+            "InternalError",
+            &e.to_string(),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        ),
     }
 }
 
@@ -90,7 +94,11 @@ pub async fn create_bucket<S: Storage>(
             .status(StatusCode::OK)
             .body(Body::empty())
             .unwrap(),
-        Err(e) => xml::error_response("InternalError", &e.to_string(), StatusCode::INTERNAL_SERVER_ERROR),
+        Err(e) => xml::error_response(
+            "InternalError",
+            &e.to_string(),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        ),
     }
 }
 
@@ -131,7 +139,11 @@ pub async fn delete_bucket<S: Storage>(
             .status(StatusCode::NO_CONTENT)
             .body(Body::empty())
             .unwrap(),
-        Err(e) => xml::error_response("InternalError", &e.to_string(), StatusCode::INTERNAL_SERVER_ERROR),
+        Err(e) => xml::error_response(
+            "InternalError",
+            &e.to_string(),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        ),
     }
 }
 
@@ -169,11 +181,22 @@ pub async fn list_objects<S: Storage>(
 
     let storage = &state.storage;
     if !storage.bucket_exists(&bucket).await {
-        return xml::error_response("NoSuchBucket", "The specified bucket does not exist", StatusCode::NOT_FOUND);
+        return xml::error_response(
+            "NoSuchBucket",
+            "The specified bucket does not exist",
+            StatusCode::NOT_FOUND,
+        );
     }
 
-    match storage.list_objects(&bucket, params.prefix.as_deref()).await {
+    match storage
+        .list_objects(&bucket, params.prefix.as_deref())
+        .await
+    {
         Ok(objects) => xml::list_objects_response(&bucket, &objects),
-        Err(e) => xml::error_response("InternalError", &e.to_string(), StatusCode::INTERNAL_SERVER_ERROR),
+        Err(e) => xml::error_response(
+            "InternalError",
+            &e.to_string(),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        ),
     }
 }

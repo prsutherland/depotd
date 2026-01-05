@@ -96,23 +96,59 @@ fn rewrite_request_uri_with_bucket<S: Storage + 'static>(
     let uri = request.uri();
     let path = uri.path();
 
+    // Try to extract bucket from Host header first (virtual-hosted style)
+    let vhost_bucket = extract_bucket_name(
+        request.headers(),
+        None,
+        uri,
+        state.bucket_hostname_pattern.as_deref(),
+    );
+
     // Check if path already has a bucket (path-style request)
     // Path-style: /bucket or /bucket/key
     // Virtual-hosted: / or /key (bucket in hostname)
-    let has_bucket_in_path = path.len() > 1 && {
-        let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
-        !segments.is_empty() && segments[0].len() >= 3 && segments[0].len() <= 63
+    // When hostname matches the pattern, vhost-style takes precedence
+    let has_bucket_in_path = if let Some(ref vhost_bucket_name) = vhost_bucket {
+        // If we have a vhost bucket from hostname (hostname matches pattern):
+        // - Vhost-style takes precedence, so we rewrite using the vhost bucket
+        // - Only exception: if path segment matches vhost bucket name exactly, it's ambiguous
+        //   In this case, we treat it as path-style to avoid double-rewriting
+        if path.len() <= 1 {
+            false
+        } else {
+            let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+            if segments.is_empty() {
+                false
+            } else {
+                let first_segment = segments[0];
+                // Only treat as path-style if path segment exactly matches vhost bucket
+                // (to avoid rewriting /bucket to /bucket/bucket)
+                first_segment == vhost_bucket_name.as_str()
+            }
+        }
+    } else {
+        // No vhost bucket (hostname doesn't match pattern) → use path-style
+        if path.len() <= 1 {
+            false
+        } else {
+            let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+            if segments.is_empty() {
+                false
+            } else {
+                let first_segment = segments[0];
+                // Consider it path-style if the segment looks like a bucket name
+                first_segment.len() >= 3
+                    && first_segment.len() <= 63
+                    && first_segment.chars().all(|c| {
+                        c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '.'
+                    })
+            }
+        }
     };
 
-    // If path doesn't have a bucket, try to extract from hostname
+    // If path doesn't have a bucket, try to extract from hostname and rewrite
     if !has_bucket_in_path {
-        // Try to extract bucket from Host header (virtual-hosted style)
-        if let Some(bucket) = extract_bucket_name(
-            request.headers(),
-            None,
-            uri,
-            state.bucket_hostname_pattern.as_deref(),
-        ) {
+        if let Some(bucket) = vhost_bucket {
             // Rewrite the URI to include the bucket in the path
             let new_path = if path == "/" {
                 format!("/{}", bucket)
@@ -189,14 +225,23 @@ where
 
 impl<S: Storage + 'static, Inner> tower::Service<Request<Body>> for VhostRewriteService<S, Inner>
 where
-    Inner: tower::Service<Request<Body>, Response = axum::response::Response, Error = std::convert::Infallible> + Clone + Send + 'static,
+    Inner: tower::Service<
+            Request<Body>,
+            Response = axum::response::Response,
+            Error = std::convert::Infallible,
+        > + Clone
+        + Send
+        + 'static,
     Inner::Future: Send + 'static,
 {
     type Response = Inner::Response;
     type Error = Inner::Error;
     type Future = Inner::Future;
 
-    fn poll_ready(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
+    fn poll_ready(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
     }
 
@@ -204,7 +249,7 @@ where
         // Rewrite the URI
         let state = (*self.state).clone();
         req = rewrite_request_uri_with_bucket(req, state);
-        
+
         // Call inner service
         self.inner.call(req)
     }
@@ -213,8 +258,6 @@ where
 /// Create a layer that rewrites URIs based on virtual-hosted style requests
 /// This must be applied around the entire Router (not as a layer on the Router)
 /// so it runs before routing happens
-pub fn vhost_rewrite_layer<S: Storage + 'static>(
-    state: AppState<S>,
-) -> VhostRewriteLayer<S> {
+pub fn vhost_rewrite_layer<S: Storage + 'static>(state: AppState<S>) -> VhostRewriteLayer<S> {
     VhostRewriteLayer::new(state)
 }

@@ -1,9 +1,6 @@
 use crate::auth::AuthConfig;
 use crate::storage::Storage;
-use axum::{
-    Router,
-    routing::get,
-};
+use axum::{Router, routing::get};
 use std::sync::Arc;
 
 pub mod bucket;
@@ -27,7 +24,6 @@ impl<S> Clone for AppState<S> {
         }
     }
 }
-
 
 pub fn router<S: Storage + 'static>(
     storage: Arc<S>,
@@ -59,4 +55,3 @@ pub fn router<S: Storage + 'static>(
         )
         .with_state(app_state)
 }
-
