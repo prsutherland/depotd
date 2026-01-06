@@ -2,7 +2,14 @@
 name = "depotd"
 version = "0.1.0"
 edition = "2024"
+description = "Bare-bones S3-compatible object store daemon (buckets as dirs, objects as files)."
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/prsutherland/depotd"
+readme = "README.md"
+keywords = ["s3", "object-storage", "storage", "minio"]
+categories = ["web-programming::http-server", "filesystem"]
+
+include = ["src/**", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE-*"]
 
 [dependencies]
 axum = "0.7"
